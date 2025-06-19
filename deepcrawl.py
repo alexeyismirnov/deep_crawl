@@ -4,7 +4,10 @@ from bs4 import BeautifulSoup
 
 # Import our modules
 from config_loader import load_config
-from page_fetcher import fetch_main_page, create_crawler, crawl_page, extract_frames
+from page_fetcher import (
+    fetch_main_page, create_crawler, crawl_page, 
+    extract_frames, fetch_page_with_frames
+)
 from link_extractor import extract_links_from_html, normalize_url
 from markdown_writer import (
     write_main_page_analysis, write_frame_content, 
@@ -156,13 +159,16 @@ async def crawl_orthodox_and_save():
                     
                     print(f"\n🔄 Crawling depth=1 link {i+1}/{len(all_links_to_crawl)}: {link_url} {parent_info}")
                     
-                    # Crawl the page
-                    page_result = await crawl_page(crawler, link_url, config)
+                    # Use the enhanced page fetcher that handles frames
+                    page_result = await fetch_page_with_frames(link_url, base_url, config)
                     
                     if page_result:
                         print(f"✅ Link {i+1} success!")
                         print(f"Content length: {len(page_result['cleaned_html'])}")
                         print(f"Title: {page_result['title']}")
+                        
+                        if page_result['has_frames']:
+                            print(f"🔍 Page has {len(page_result['frames'])} frames")
                         
                         # Extract links from this page
                         page_links = extract_links_from_html(
@@ -179,10 +185,18 @@ async def crawl_orthodox_and_save():
                             'frame': link_data['parent_frame']
                         }
                         
+                        # Add information about frames if present
+                        frames_info = ""
+                        if page_result['has_frames']:
+                            frames_info = f"\n**Contains {len(page_result['frames'])} frames**\n"
+                            for frame in page_result['frames']:
+                                frames_info += f"- Frame {frame['number']}: {frame['name']} ({frame['url']})\n"
+                        
                         page_md_path = write_depth1_page(
                             page_md_path, page_result['title'], link_url,
                             page_result['cleaned_html'], page_result['html'],
-                            parent_info, link_text, links=page_links
+                            parent_info, link_text, links=page_links,
+                            additional_info=frames_info
                         )
                         
                         depth1_pages.append({
@@ -193,6 +207,8 @@ async def crawl_orthodox_and_save():
                             'content': page_result['cleaned_html'],
                             'parent_frame': link_data['parent_frame'],
                             'parent_name': link_data['parent_name'],
+                            'has_frames': page_result['has_frames'],
+                            'frames': page_result.get('frames', []),
                             'file_path': page_md_path
                         })
                         

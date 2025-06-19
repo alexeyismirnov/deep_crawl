@@ -92,7 +92,7 @@ def write_frame_content(output_path, frame_number, frame_name, frame_url, conten
     print(f"💾 Saved frame {frame_number} to: {output_path}")
     return output_path
 
-def write_depth1_page(output_path, title, url, content, html, parent_info, link_text, links=None):
+def write_depth1_page(output_path, title, url, content, html, parent_info, link_text, links=None, additional_info=None):
     """
     Write depth=1 page content to a markdown file
     
@@ -105,6 +105,7 @@ def write_depth1_page(output_path, title, url, content, html, parent_info, link_
         parent_info (dict): Information about the parent page
         link_text (str): Text of the link that led to this page
         links (list, optional): List of links found in the page
+        additional_info (str, optional): Additional information to include
         
     Returns:
         str: Path to the created file
@@ -116,6 +117,10 @@ def write_depth1_page(output_path, title, url, content, html, parent_info, link_
         f.write(f"**Parent:** {parent_info['name']} (Frame {parent_info['frame']})\n")
         f.write(f"**Link Text:** {link_text}\n")
         f.write(f"**Content Length:** {len(content)} characters\n")
+        
+        # Add additional info if provided
+        if additional_info:
+            f.write(additional_info)
         
         f.write(f"\n## Content\n\n")
         f.write(content)
@@ -167,7 +172,8 @@ def write_summary(output_path, base_url, max_depth, frames_info, depth1_pages, m
         # List depth=1 files
         for i, page in enumerate(depth1_pages):
             parent_info = f"from {page['parent_name']}"
-            f.write(f"{len(frames_info)+i+2}. **Depth=1 Page {page['number']} ({parent_info}):** `{os.path.basename(page['file_path'])}`\n")
+            frames_info = " (has frames)" if page.get('has_frames', False) else ""
+            f.write(f"{len(frames_info)+i+2}. **Depth=1 Page {page['number']} ({parent_info}):{frames_info}** `{os.path.basename(page['file_path'])}`\n")
         
         f.write(f"\n## Site Structure\n\n")
         f.write(f"**Website:** 中国正教会 (Chinese Orthodox Church)\n\n")
@@ -193,11 +199,20 @@ def write_summary(output_path, base_url, max_depth, frames_info, depth1_pages, m
         if depth1_pages:
             f.write(f"### Depth=1 Pages\n\n")
             for page in depth1_pages:
-                f.write(f"#### Page {page['number']}: {page['title']}\n")
+                frames_info = " (contains frames)" if page.get('has_frames', False) else ""
+                f.write(f"#### Page {page['number']}: {page['title']}{frames_info}\n")
                 f.write(f"- **URL:** {page['url']}\n")
                 f.write(f"- **Content Length:** {len(page['content'])} characters\n")
                 f.write(f"- **Parent:** {page['parent_name']} (Frame {page['parent_frame']})\n")
-                f.write(f"- **File:** [{os.path.basename(page['file_path'])}]({os.path.basename(page['file_path'])})\n\n")
+                f.write(f"- **File:** [{os.path.basename(page['file_path'])}]({os.path.basename(page['file_path'])})\n")
+                
+                # Add frame information if present
+                if page.get('has_frames', False) and page.get('frames'):
+                    f.write(f"- **Frames ({len(page['frames'])}):**\n")
+                    for frame in page['frames']:
+                        f.write(f"  - Frame {frame['number']}: {frame['name']} ({frame['url']})\n")
+                
+                f.write("\n")
     
     print(f"📋 Created summary file: {output_path}")
     return output_path
