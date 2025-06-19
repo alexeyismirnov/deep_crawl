@@ -155,7 +155,7 @@ async def crawl_orthodox_and_save():
             
             # If no frames, use links from main page
             if not frame_pages and 'main_links' in locals():
-                links_by_depth[0] = main_links[:config['max_links_per_page']]
+                links_by_depth[0] = main_links
             
             # Crawl each depth level
             for current_depth in range(1, config['max_depth'] + 1):
@@ -174,12 +174,8 @@ async def crawl_orthodox_and_save():
                 # Get links to crawl at this depth
                 links_to_crawl = links_by_depth[current_depth - 1]
                 
-                # Limit the number of links to crawl if there are too many
-                if len(links_to_crawl) > config['max_links_per_page'] * 3:
-                    print(f"⚠️ Too many links ({len(links_to_crawl)}), limiting to {config['max_links_per_page'] * 3}")
-                    links_to_crawl = links_to_crawl[:config['max_links_per_page'] * 3]
-                
-                print(f"🔄 Crawling {len(links_to_crawl)} links at depth={current_depth}")
+                # No more limiting the number of links to crawl
+                print(f"🔄 Crawling all {len(links_to_crawl)} links at depth={current_depth}")
                 
                 # Crawl each link
                 depth_pages = []
