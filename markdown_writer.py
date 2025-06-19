@@ -92,9 +92,9 @@ def write_frame_content(output_path, frame_number, frame_name, frame_url, conten
     print(f"💾 Saved frame {frame_number} to: {output_path}")
     return output_path
 
-def write_depth1_page(output_path, title, url, content, html, parent_info, link_text, links=None, additional_info=None):
+def write_page_content(output_path, title, url, content, html, parent_info, link_text, depth, links=None, additional_info=None):
     """
-    Write depth=1 page content to a markdown file
+    Write page content to a markdown file
     
     Args:
         output_path (str): Path to the output file
@@ -104,6 +104,7 @@ def write_depth1_page(output_path, title, url, content, html, parent_info, link_
         html (str): Raw HTML content
         parent_info (dict): Information about the parent page
         link_text (str): Text of the link that led to this page
+        depth (int): Depth level of the page
         links (list, optional): List of links found in the page
         additional_info (str, optional): Additional information to include
         
@@ -114,7 +115,9 @@ def write_depth1_page(output_path, title, url, content, html, parent_info, link_
         f.write(f"# {title}\n\n")
         f.write(f"**Crawl Date:** {get_formatted_datetime()}\n")
         f.write(f"**URL:** {url}\n")
-        f.write(f"**Parent:** {parent_info['name']} (Frame {parent_info['frame']})\n")
+        f.write(f"**Depth:** {depth}\n")
+        f.write(f"**Parent:** {parent_info['name']} ({parent_info['type']})\n")
+        f.write(f"**Parent URL:** {parent_info['url']}\n")
         f.write(f"**Link Text:** {link_text}\n")
         f.write(f"**Content Length:** {len(content)} characters\n")
         
@@ -135,10 +138,10 @@ def write_depth1_page(output_path, title, url, content, html, parent_info, link_
         f.write(f"\n\n## Raw HTML\n\n")
         f.write(f"```html\n{html}\n```\n")
     
-    print(f"💾 Saved depth=1 page to: {output_path}")
+    print(f"💾 Saved depth={depth} page to: {output_path}")
     return output_path
 
-def write_summary(output_path, base_url, max_depth, frames_info, depth1_pages, main_analysis_path):
+def write_summary(output_path, base_url, max_depth, all_pages, main_analysis_path):
     """
     Write a summary of the crawl to a markdown file
     
@@ -146,64 +149,91 @@ def write_summary(output_path, base_url, max_depth, frames_info, depth1_pages, m
         output_path (str): Path to the output file
         base_url (str): Base URL of the site
         max_depth (int): Maximum crawl depth
-        frames_info (list): List of frame information dictionaries
-        depth1_pages (list): List of depth=1 page information dictionaries
+        all_pages (list): List of all page information dictionaries
         main_analysis_path (str): Path to the main page analysis file
         
     Returns:
         str: Path to the created file
     """
+    # Group pages by depth
+    pages_by_depth = {}
+    for page in all_pages:
+        depth = page['depth']
+        if depth not in pages_by_depth:
+            pages_by_depth[depth] = []
+        pages_by_depth[depth].append(page)
+    
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(f"# Orthodox.cn Crawl Results\n\n")
         f.write(f"**Crawl Date:** {get_formatted_datetime()}\n")
         f.write(f"**Base URL:** {base_url}\n")
         f.write(f"**Max Depth:** {max_depth}\n")
-        f.write(f"**Total Frames:** {len(frames_info)}\n")
-        f.write(f"**Successfully Crawled Depth=1 Pages:** {len(depth1_pages)}\n")
-        f.write(f"**Total Pages Crawled:** {len(frames_info) + len(depth1_pages)}\n\n")
+        f.write(f"**Total Pages Crawled:** {len(all_pages)}\n\n")
         
-        f.write(f"## Files Generated\n\n")
+        # Count pages by depth
+        f.write(f"## Pages by Depth\n\n")
+        f.write(f"| Depth | Count |\n")
+        f.write(f"|-------|-------|\n")
+        for depth in sorted(pages_by_depth.keys()):
+            f.write(f"| {depth} | {len(pages_by_depth[depth])} |\n")
+        
+        f.write(f"\n## Files Generated\n\n")
         f.write(f"1. **Main Page Analysis:** `{os.path.basename(main_analysis_path)}`\n")
         
-        # List frame files
-        for i, frame in enumerate(frames_info):
-            f.write(f"{i+2}. **Frame {frame['number']} ({frame['name']}):** `{os.path.basename(frame['file_path'])}`\n")
-        
-        # List depth=1 files
-        for i, page in enumerate(depth1_pages):
-            parent_info = f"from {page['parent_name']}"
-            frames_info = " (has frames)" if page.get('has_frames', False) else ""
-            f.write(f"{len(frames_info)+i+2}. **Depth=1 Page {page['number']} ({parent_info}):{frames_info}** `{os.path.basename(page['file_path'])}`\n")
+        # List all pages by depth
+        file_counter = 2
+        for depth in sorted(pages_by_depth.keys()):
+            f.write(f"\n### Depth {depth} Files\n\n")
+            for page in pages_by_depth[depth]:
+                page_type = page['type']
+                page_name = page['name'] if 'name' in page else page['title']
+                has_frames = " (has frames)" if page.get('has_frames', False) else ""
+                
+                f.write(f"{file_counter}. **{page_type.capitalize()} {page['number']} ({page_name}):{has_frames}** `{os.path.basename(page['file_path'])}`\n")
+                file_counter += 1
         
         f.write(f"\n## Site Structure\n\n")
         f.write(f"**Website:** 中国正教会 (Chinese Orthodox Church)\n\n")
         
-        if frames_info:
-            f.write(f"### Frame Contents\n\n")
-            for frame in frames_info:
-                f.write(f"#### Frame {frame['number']}: {frame['name']}\n")
-                f.write(f"- **URL:** {frame['url']}\n")
-                f.write(f"- **Content Length:** {len(frame['content'])} characters\n")
-                if frame.get('title'):
-                    f.write(f"- **Title:** {frame['title']}\n")
-                f.write(f"- **File:** [{os.path.basename(frame['file_path'])}]({os.path.basename(frame['file_path'])})\n")
-                
-                # List links from this frame that were crawled
-                crawled_from_this = [p for p in depth1_pages if p['parent_frame'] == frame['number']]
-                if crawled_from_this:
-                    f.write(f"- **Links Crawled:** {len(crawled_from_this)}\n")
-                    f.write(f"  - " + ", ".join([f"[{p['text']}]({os.path.basename(p['file_path'])})" for p in crawled_from_this]) + "\n\n")
-                else:
-                    f.write("\n")
+        # Create a page tree
+        f.write(f"### Page Hierarchy\n\n")
         
-        if depth1_pages:
-            f.write(f"### Depth=1 Pages\n\n")
-            for page in depth1_pages:
+        # Start with depth 0 pages (frames)
+        if 0 in pages_by_depth:
+            for page in pages_by_depth[0]:
+                f.write(f"- **{page['title']}** ({page['url']})\n")
+                
+                # Find children of this page
+                children = [p for p in all_pages if p.get('parent_id') == page['id']]
+                if children:
+                    for child in children:
+                        f.write(f"  - [{child['title']}]({os.path.basename(child['file_path'])}) (depth={child['depth']})\n")
+                        
+                        # Find grandchildren (limit to 3 levels for readability)
+                        grandchildren = [p for p in all_pages if p.get('parent_id') == child['id']]
+                        if grandchildren:
+                            for gc in grandchildren[:5]:  # Limit to 5 grandchildren
+                                f.write(f"    - [{gc['title']}]({os.path.basename(gc['file_path'])}) (depth={gc['depth']})\n")
+                            
+                            if len(grandchildren) > 5:
+                                f.write(f"    - ... and {len(grandchildren) - 5} more\n")
+        
+        # Detailed page information by depth
+        for depth in sorted(pages_by_depth.keys()):
+            f.write(f"\n### Depth {depth} Pages\n\n")
+            
+            for page in pages_by_depth[depth]:
+                page_type = page['type']
+                page_title = page['title']
                 frames_info = " (contains frames)" if page.get('has_frames', False) else ""
-                f.write(f"#### Page {page['number']}: {page['title']}{frames_info}\n")
+                
+                f.write(f"#### {page_type.capitalize()} {page['number']}: {page_title}{frames_info}\n")
                 f.write(f"- **URL:** {page['url']}\n")
                 f.write(f"- **Content Length:** {len(page['content'])} characters\n")
-                f.write(f"- **Parent:** {page['parent_name']} (Frame {page['parent_frame']})\n")
+                
+                if 'parent_name' in page and page['parent_name']:
+                    f.write(f"- **Parent:** {page['parent_name']} ({page.get('parent_url', 'No URL')})\n")
+                
                 f.write(f"- **File:** [{os.path.basename(page['file_path'])}]({os.path.basename(page['file_path'])})\n")
                 
                 # Add frame information if present
@@ -211,6 +241,16 @@ def write_summary(output_path, base_url, max_depth, frames_info, depth1_pages, m
                     f.write(f"- **Frames ({len(page['frames'])}):**\n")
                     for frame in page['frames']:
                         f.write(f"  - Frame {frame['number']}: {frame['name']} ({frame['url']})\n")
+                
+                # List links that were crawled from this page
+                children = [p for p in all_pages if p.get('parent_id') == page.get('id')]
+                if children:
+                    f.write(f"- **Links Crawled ({len(children)}):**\n")
+                    for child in children[:10]:  # Limit to 10 links
+                        f.write(f"  - [{child['title']}]({os.path.basename(child['file_path'])})\n")
+                    
+                    if len(children) > 10:
+                        f.write(f"  - ... and {len(children) - 10} more\n")
                 
                 f.write("\n")
     
