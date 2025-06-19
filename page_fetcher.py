@@ -4,6 +4,7 @@ import ssl
 import chardet
 from bs4 import BeautifulSoup
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
+from link_extractor import is_same_domain
 
 async def fetch_page_with_encoding_detection(url, session):
     """
@@ -213,6 +214,11 @@ async def fetch_page_with_frames(url, base_url, config):
                             # Get the directory of the current URL
                             url_dir = '/'.join(url.split('/')[:-1])
                             frame_url = f"{url_dir}/{src}"
+                        
+                        # Skip external domains
+                        if not is_same_domain(frame_url, base_url):
+                            print(f"⏭️ Skipping external frame: {frame_url}")
+                            continue
                         
                         print(f"🔄 Accessing frame {i+1} in {url}: {frame_url}")
                         

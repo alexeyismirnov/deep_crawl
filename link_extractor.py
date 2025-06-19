@@ -1,4 +1,5 @@
 from bs4 import BeautifulSoup
+from urllib.parse import urlparse
 
 def normalize_url(url, base_url, current_url=None):
     """
@@ -32,17 +33,47 @@ def normalize_url(url, base_url, current_url=None):
     else:
         return f"{base_url}/{url}"
 
-def should_skip_url(url, config):
+def is_same_domain(url, base_url):
+    """
+    Check if a URL belongs to the same domain as the base URL
+    
+    Args:
+        url (str): URL to check
+        base_url (str): Base URL of the site
+        
+    Returns:
+        bool: True if the URL is from the same domain, False otherwise
+    """
+    try:
+        url_domain = urlparse(url).netloc
+        base_domain = urlparse(base_url).netloc
+        
+        # Handle www. prefix
+        if url_domain.startswith('www.'):
+            url_domain = url_domain[4:]
+        if base_domain.startswith('www.'):
+            base_domain = base_domain[4:]
+        
+        return url_domain == base_domain
+    except:
+        return False
+
+def should_skip_url(url, config, base_url):
     """
     Check if a URL should be skipped based on configuration
     
     Args:
         url (str): URL to check
         config (dict): Configuration dictionary
+        base_url (str): Base URL of the site
         
     Returns:
         bool: True if the URL should be skipped, False otherwise
     """
+    # Skip external domains
+    if not is_same_domain(url, base_url):
+        return True
+    
     # Skip based on extensions
     for ext in config['skip_extensions']:
         if ext and url.lower().endswith(ext.lower()):
@@ -87,7 +118,7 @@ def extract_links_from_html(html, base_url, current_url, config):
             continue
         
         # Check if we should skip this URL
-        if should_skip_url(normalized_url, config):
+        if should_skip_url(normalized_url, config, base_url):
             continue
         
         links.append({
@@ -106,7 +137,7 @@ def extract_links_from_html(html, base_url, current_url, config):
             continue
         
         # Check if we should skip this URL
-        if should_skip_url(normalized_url, config):
+        if should_skip_url(normalized_url, config, base_url):
             continue
         
         links.append({
