@@ -28,9 +28,12 @@ async def crawl_orthodox_and_save():
     # Create output directory
     output_dir = create_output_directory(config['output_dir'])
     
+    # Use the START_URL from configuration
+    start_url = config['start_url']
+    print(f"🌐 Using start URL from configuration: {start_url}")
+
     # Fetch the main page
-    urls_to_try = ["https://orthodox.cn/", "http://orthodox.cn/"]
-    main_html, base_url, encoding = await fetch_main_page(urls_to_try)
+    main_html, base_url, encoding = await fetch_main_page([start_url], config)
     
     if not main_html:
         return None
@@ -227,6 +230,10 @@ async def crawl_orthodox_and_save():
                             for frame in page_result['frames']:
                                 frames_info += f"- Frame {frame['number']}: {frame['name']} ({frame['url']})\n"
                         
+                        # Add language information if detected
+                        if config.get('language'):
+                            frames_info += f"\n**Target Language:** {config['language']}\n"
+                        
                         page_md_path = write_page_content(
                             page_md_path, page_result['title'], link_url,
                             page_result['cleaned_html'], page_result['html'],
@@ -243,7 +250,7 @@ async def crawl_orthodox_and_save():
                             link['parent_name'] = page_result['title']
                             link['parent_url'] = link_url
                             link['parent_type'] = 'page'
-                            
+                
                             # Add to next depth if not already crawled
                             if link['url'] not in all_crawled_pages:
                                 links_by_depth[current_depth].append(link)

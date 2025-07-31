@@ -43,8 +43,8 @@ def write_main_page_analysis(output_path, main_html, base_url, encoding, frames,
                 attrs = ', '.join([f"{k}={v}" for k, v in frame.attrs.items() if k not in ['src', 'name']])
                 f.write(f"| {i+1} | {name} | `{src}` | {attrs} |\n")
         
-        f.write(f"\n## Raw HTML Structure\n\n")
-        f.write(f"```html\n{main_html}\n```\n")
+        # f.write(f"\n## Raw HTML Structure\n\n")
+        # f.write(f"```html\n{main_html}\n```\n")
     
     print(f"💾 Saved main page analysis to: {output_path}")
     return output_path
@@ -86,8 +86,8 @@ def write_frame_content(output_path, frame_number, frame_name, frame_url, conten
                 f.write(f"- [{link['text']}]({link['url']})\n")
         
         # Add raw HTML section
-        f.write(f"\n\n## Raw HTML\n\n")
-        f.write(f"```html\n{html}\n```\n")
+        # f.write(f"\n\n## Raw HTML\n\n")
+        # f.write(f"```html\n{html}\n```\n")
     
     print(f"💾 Saved frame {frame_number} to: {output_path}")
     return output_path
@@ -135,8 +135,8 @@ def write_page_content(output_path, title, url, content, html, parent_info, link
                 f.write(f"- [{link['text']}]({link['url']})\n")
         
         # Add raw HTML section
-        f.write(f"\n\n## Raw HTML\n\n")
-        f.write(f"```html\n{html}\n```\n")
+        # f.write(f"\n\n## Raw HTML\n\n")
+        # f.write(f"```html\n{html}\n```\n")
     
     print(f"💾 Saved depth={depth} page to: {output_path}")
     return output_path

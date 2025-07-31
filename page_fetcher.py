@@ -2,9 +2,38 @@ import asyncio
 import aiohttp
 import ssl
 import chardet
+import os
+from urllib.parse import urlparse, urljoin
 from bs4 import BeautifulSoup
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
 from link_extractor import is_same_domain
+from language_detector import is_target_language
+
+def get_base_url(url):
+    """
+    Extract the base URL (domain with path up to the last /) from a URL
+    
+    Args:
+        url (str): URL to extract base from
+        
+    Returns:
+        str: Base URL
+    """
+    parsed = urlparse(url)
+    # Get the domain
+    domain = f"{parsed.scheme}://{parsed.netloc}"
+    
+    # If the URL ends with a filename (has a dot in the last part), 
+    # remove the filename to get the directory
+    path = parsed.path
+    if '.' in os.path.basename(path):
+        path = os.path.dirname(path)
+    
+    # Ensure path ends with a slash
+    if path and not path.endswith('/'):
+        path += '/'
+        
+    return domain + path
 
 async def fetch_page_with_encoding_detection(url, session):
     """
@@ -38,8 +67,8 @@ async def fetch_page_with_encoding_detection(url, session):
                 except UnicodeDecodeError as decode_error:
                     print(f"⚠️ Failed to decode with {encoding}, trying fallback encodings...")
                     
-                    # Try common Chinese encodings as fallback
-                    fallback_encodings = ['gb2312', 'gbk', 'gb18030', 'utf-8', 'latin-1']
+                    # Try common Russian and Chinese encodings as fallback
+                    fallback_encodings = ['koi8-r', 'windows-1251', 'gb2312', 'gbk', 'gb18030', 'utf-8', 'latin-1']
                     
                     for fallback_encoding in fallback_encodings:
                         try:
@@ -57,12 +86,13 @@ async def fetch_page_with_encoding_detection(url, session):
     
     return None, None
 
-async def fetch_main_page(urls_to_try):
+async def fetch_main_page(urls_to_try, config):
     """
     Fetch the main page using aiohttp
     
     Args:
         urls_to_try (list): List of URLs to try
+        config (dict): Configuration dictionary
         
     Returns:
         tuple: (html_content, base_url, encoding) or (None, None, None) if failed
@@ -73,7 +103,7 @@ async def fetch_main_page(urls_to_try):
     ssl_context.verify_mode = ssl.CERT_NONE
     
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        'User-Agent': config['user_agent']
     }
     
     async with aiohttp.ClientSession(
@@ -92,14 +122,21 @@ async def fetch_main_page(urls_to_try):
                 html_content, encoding = await fetch_page_with_encoding_detection(url, session)
                 
                 if html_content:
+                    # Check if the page is in the target language
+                    if config.get('language') and not is_target_language(html_content, config['language']):
+                        print(f"⏭️ Skipping main page: not in target language ({config['language']})")
+                        continue
+                    
                     main_html = html_content
-                    base_url = url.rstrip('/')
+                    # Extract the base URL correctly
+                    base_url = get_base_url(url)
+                    print(f"📌 Using base URL: {base_url}")
                     return main_html, base_url, encoding
                 
             except Exception as e:
                 print(f"❌ Error with {url}: {str(e)}")
         
-        print("❌ Could not retrieve main page")
+        print("❌ Could not retrieve main page in target language")
         return None, None, None
 
 async def create_crawler(config):
@@ -144,6 +181,11 @@ async def crawl_page(crawler, url, config):
         )
         
         if result.success:
+            # Check if the page is in the target language
+            if config.get('language') and not is_target_language(result.html, config['language']):
+                print(f"⏭️ Skipping page: not in target language ({config['language']})")
+                return None
+            
             return {
                 'url': url,
                 'html': result.html,
@@ -191,6 +233,11 @@ async def fetch_page_with_frames(url, base_url, config):
         if not html_content:
             return None
         
+        # Check if the page is in the target language
+        if config.get('language') and not is_target_language(html_content, config['language']):
+            print(f"⏭️ Skipping page: not in target language ({config['language']})")
+            return None
+        
         # Check if the page has frames
         soup = BeautifulSoup(html_content, 'html.parser')
         frames = soup.find_all(['frame', 'iframe'])
@@ -202,18 +249,16 @@ async def fetch_page_with_frames(url, base_url, config):
             async with await create_crawler(config) as crawler:
                 frame_contents = []
                 
+                # Get the correct base URL for this page
+                page_base_url = get_base_url(url)
+                print(f"📌 Using page base URL for frames: {page_base_url}")
+                
                 for i, frame in enumerate(frames):
                     src = frame.get('src', '')
                     if src and not src.startswith('javascript:') and src != 'about:blank':
-                        # Build absolute URL
-                        if src.startswith('/'):
-                            frame_url = f"{base_url}{src}"
-                        elif src.startswith('http'):
-                            frame_url = src
-                        else:
-                            # Get the directory of the current URL
-                            url_dir = '/'.join(url.split('/')[:-1])
-                            frame_url = f"{url_dir}/{src}"
+                        # Build absolute URL correctly using urljoin
+                        frame_url = urljoin(page_base_url, src)
+                        print(f"🔗 Frame source: {src} -> {frame_url}")
                         
                         # Skip external domains
                         if not is_same_domain(frame_url, base_url):

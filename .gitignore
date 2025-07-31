@@ -16,6 +16,7 @@ results/
 !USAGE_GUIDE.md
 !CHANGELOG.md
 !CONTRIBUTING.md
+!website_plan.md
 
 # JSON data files
 crawl_data_*.json
