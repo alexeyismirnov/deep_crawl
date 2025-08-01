@@ -10,7 +10,8 @@ The first priority is to extract, clean, and structure the valuable content from
 
 1.  **Automated Content Extraction & Cleaning:**
     *   Develop a script to parse all markdown files in the `output` directory.
-    *   This script will extract key metadata: title, original URL, and the full HTML content.
+    *   This script will extract key metadata: title, original URL, parent URL, and the full HTML content.
+    *   The script should remove all <script> tags from HTML content.
     *   Crucially, the script will address the character encoding issues by detecting the original encoding (e.g., `gb2312`, `windows-1251`, `iso-8859-1`) and converting all content to the modern `UTF-8` standard. This will fix the garbled text.
     *   All extracted and cleaned data will be stored in a structured JSON file, creating a clean, portable, and machine-readable dataset to serve as the foundation for the new site.
 
@@ -19,49 +20,42 @@ The first priority is to extract, clean, and structure the valuable content from
 
 ### **Phase 2: Information Architecture & User Experience**
 
-With clean data, the next step is to design a logical and intuitive structure for the new website.
+With clean data, the next step is to design a new statically generated website using Hugo framework. The website
+should be in RUSSIAN language, including navbar, menus, and content. No "language switching" component is necessary.
+
+ Choose appropriate Hugo theme for an encyclopedia-style website, with a 2-level menu system (i.e. each menu in the navbar can have sub-menus).
+
+ The Hugo website should be placed into "orthodox-china" sub-directory inside project root.
 
 1.  **New Information Architecture:**
-    *   Discard the confusing frameset structure and design a clear, hierarchical navigation system. The new structure will be organized by topic, making it easy for users to find information.
+    *   Design a clear, hierarchical navigation system. To design the new structure we'll use metadata in JSON file
+    generated in the previous step. Specifically, we'll be looking at the "original URL" and "parent URL" to infer the category each particular webpage belongs to. We'll analyze the relative URL part and assign a category to each page.
 
-    *   **Proposed Site Structure:**
+    In the generated website, all menus should be in RUSSIAN.
+
+    *   **Proposed Site Structure (menus)**
         *   **Home:** A welcoming landing page with an introduction and links to featured content.
-        *   **About:**
-            *   History of Orthodoxy in China
-            *   Dioceses and Parishes
-            *   Clergy and People
-        *   **Faith & Doctrine:**
-            *   Catechism
-            *   Theology & Patristics
-            *   Holy Scriptures
-        *   **Worship & Liturgy:**
-            *   Liturgical Texts
-            *   Church Calendar
-            *   Icons
-        *   **News & Media:**
-            *   Latest News
-            *   Publications & Journals
-            *   Multimedia (Audio/Video)
-        *   **Resources:**
-            *   Links
-            *   Donations
-
-2.  **Modern URL Structure:**
-    *   Implement clean, human-readable, and SEO-friendly URLs. For example:
-        *   `https://orthodox.cn/en/about/history`
-        *   `https://orthodox.cn/ru/faith-doctrine/catechism`
-        *   `https://orthodox.cn/zh/worship-liturgy/icons`
-
-### **Phase 3: Website Development & Deployment**
-
-This phase focuses on building the new website using modern web technologies.
-
-1.  **Technology Choices:**
-    *   **Static Site Generator (SSG):** Use a modern SSG like **Hugo** or **Next.js**. This approach will produce a website that is extremely fast, secure, and requires minimal maintenance.
-    *   **Frontend Framework:** Use a modern CSS framework like **Tailwind CSS** to create a clean, responsive, and aesthetically pleasing design that works on all devices.
-
-2.  **Development Process:**
-    *   Build a set of reusable templates for different page types (e.g., home, article, section landing page).
-    *   The clean data from Phase 1 will be used to programmatically generate all the pages of the website.
-    *   A client-side search feature will be implemented using a library like **Lunr.js**, allowing users to easily search the entire site's content.
-    *   The final static website will be deployed to a modern hosting platform like **Netlify** or **Vercel**, which provides excellent performance and reliability.
+        *   **News:** Assign a page to this category if page URL contains "/news/" and if the page
+        does not belong to any sub-categories below:
+            *   **Archive** - assign to this sub-category if parent URL contains "/news/archive_ru.htm"
+            *   **National news** - assign to this sub-category if parent URL contains "/news/index_ru.html"
+            *   **Asian news** - assign to this sub-category if parent URL contains "/news/asia_ru.html"
+            *   **International** - assign to this sub-category if parent URL contains "/news/intl_ru.htm"
+            *   **Events** - assign to this sub-category if parent URL contains "/news/events_ru.htm"
+            *   **Interview**  - assign to this sub-category if parent URL contains "/news/interview_ru.htm"
+            *  **Publications** - assign to this sub-category if parent URL contains "/news/books_ru.htm"
+        *   **Church today**  Assign a page to this category if page URL contains "/contemporary/" and if the page
+        does not belong to any sub-categories below:
+            *   **Dioceses** - assign to this sub-category if parent URL contains "contemporary/diocese_ru.htm"
+            *   **Parishes** - assign to this sub-category if parent URL contains "contemporary/parish_ru.htm"
+            *   **Official** - assign to this sub-category if parent URL contains "contemporary/officialdoc_ru.htm"
+            *   **Persons** - assign to this sub-category if parent URL contains "contemporary/persons_ru.htm"
+            *   **Father Alexander** - assign to this sub-category if parent URL 
+            contains "contemporary/fatheralexander_ru.htm"
+        *   **Orthodox Church of China** - this menu has no sub-menus. assign to this category if 
+        parent URL contains "/localchurch/index_ru.html"
+        *   **Catechism** - this menu has no sub-menus. assign to this category if 
+        parent URL contains "/catechesis/index_ru.html"
+        *   **Other** - assign to this category all pages that have not been assigned to any other category
+  
+  When creating Markdown files for Hugo, make sure that in 'title' and 'description' metadata fields, all qoute characters are escaped. Otherwise, parsing errors may occur.
