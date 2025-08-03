@@ -52,8 +52,12 @@ should be in RUSSIAN language, including navbar, menus, and content. No "languag
             *   **Persons** - assign to this sub-category if parent URL contains "contemporary/persons_ru.htm"
             *   **Father Alexander** - assign to this sub-category if parent URL 
             contains "contemporary/fatheralexander_ru.htm"
-        *   **Orthodox Church of China** - this menu has no sub-menus. assign to this category if 
-        parent URL contains "/localchurch/index_ru.html"
+        *   **Orthodox Church of China** - Assign a page to this category if page URL contains "/localchurch/" and if the page does not belong to any sub-categories below:
+            *   **Dioceses** - assign to this sub-category if parent URL contains "localchurch/diocese_ru.htm"
+            *   **Persons** - assign to this sub-category if parent URL contains "localchurch/persons_ru.htm"
+            *   **Russian Spiritual Mission** - assign to this sub-category if parent URL contains "localchurch/mission_ru.htm"
+            *  **Holy people and holy icons** - assign to this sub-category if parent URL 
+            contains "saints/index_ru.html"
         *   **Catechism** - this menu has no sub-menus. assign to this category if 
         parent URL contains "/catechesis/index_ru.html"
         *   **Other** - assign to this category all pages that have not been assigned to any other category
