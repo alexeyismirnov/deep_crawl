@@ -4,7 +4,6 @@ Hugo Content Generator
 Generates Hugo markdown files from the extracted JSON data
 """
 
-import os
 import json
 import re
 from pathlib import Path
@@ -27,7 +26,7 @@ class HugoContentGenerator:
         self.menu_translations = {
             "News": "Новости",
             "News/Archive": "Архив",
-            "News/National news": "Национальные новости", 
+            "News/National news": "Национальные новости",
             "News/Asian news": "Новости Азии",
             "News/International": "Международные новости",
             "News/Events": "События",
@@ -35,11 +34,15 @@ class HugoContentGenerator:
             "News/Publications": "Публикации",
             "Church today": "Церковь сегодня",
             "Church today/Dioceses": "Епархии",
-            "Church today/Parishes": "Приходы", 
+            "Church today/Parishes": "Приходы",
             "Church today/Official": "Официальные документы",
             "Church today/Persons": "Персоналии",
             "Church today/Father Alexander": "Отец Александр",
             "Orthodox Church of China": "Православная Церковь Китая",
+            "Orthodox Church of China/Dioceses": "Епархии",
+            "Orthodox Church of China/Persons": "Персоналии",
+            "Orthodox Church of China/Russian Spiritual Mission": "Русская Духовная Миссия",
+            "Orthodox Church of China/Holy people and holy icons": "Святые люди и святые иконы",
             "Catechism": "Катехизис",
             "Other": "Прочее"
         }
@@ -88,15 +91,6 @@ class HugoContentGenerator:
         # Remove newlines and extra spaces
         text = re.sub(r'\s+', ' ', text).strip()
 
-        return text
-        
-        # Remove HTML tags first
-        text = re.sub(r'<[^>]+>', '', text)
-        # Escape quotes
-        text = text.replace('"', '\\"').replace("'", "\\'")
-        # Remove newlines and extra spaces
-        text = re.sub(r'\s+', ' ', text).strip()
-        
         return text
     
     def get_category_path(self, category):

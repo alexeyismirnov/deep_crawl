@@ -17,11 +17,13 @@ results/
 !CHANGELOG.md
 !CONTRIBUTING.md
 !website_plan.md
+!PROJECT_SUMMARY.md
 
 # JSON data files
 crawl_data_*.json
 site_data_*.json
 results_*.json
+extracted_content.json
 
 # CSV exports
 *.csv

@@ -4,13 +4,12 @@ Content Extraction and Cleaning Script
 Extracts content from crawled markdown files and creates a structured JSON dataset
 """
 
-import os
 import json
 import re
-import chardet
 from bs4 import BeautifulSoup
 from pathlib import Path
 import logging
+from urllib.parse import urlparse, urljoin, urlunparse
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -21,7 +20,53 @@ class ContentExtractor:
         self.output_dir = Path(output_dir)
         self.json_output = json_output
         self.extracted_data = []
-        
+
+    def normalize_url_path(self, url):
+        """
+        Normalize URL by resolving '..' and '.' path segments
+
+        Args:
+            url (str): URL to normalize
+
+        Returns:
+            str: Normalized URL with resolved path segments
+        """
+        if not url:
+            return url
+
+        try:
+            # Parse the URL
+            parsed = urlparse(url)
+
+            # Split the path into segments
+            path_segments = parsed.path.split('/')
+
+            # Resolve '..' and '.' segments
+            normalized_segments = []
+            for segment in path_segments:
+                if segment == '..':
+                    # Go up one level (remove last segment if exists)
+                    if normalized_segments:
+                        normalized_segments.pop()
+                elif segment == '.' or segment == '':
+                    # Skip current directory references and empty segments
+                    # (except for the first empty segment which represents root)
+                    if not normalized_segments:
+                        normalized_segments.append('')
+                else:
+                    normalized_segments.append(segment)
+
+            # Reconstruct the path
+            normalized_path = '/'.join(normalized_segments)
+
+            # Reconstruct the URL
+            normalized_parsed = parsed._replace(path=normalized_path)
+            return urlunparse(normalized_parsed)
+
+        except Exception as e:
+            logger.warning(f"Failed to normalize URL {url}: {e}")
+            return url
+
     def detect_and_fix_encoding(self, text):
         """
         Detect and fix character encoding issues
@@ -132,10 +177,10 @@ class ContentExtractor:
                 metadata['clean_text'] = soup.get_text(strip=True)
 
         # Extract original URL
-        url_match = re.search(r'\*\*Original URL:\*\*\s*(.+)$', content, re.MULTILINE)
+        url_match = re.search(r'\*\*URL:\*\*\s*(.+)$', content, re.MULTILINE)
         if url_match:
             metadata['original_url'] = url_match.group(1).strip()
-            
+
         # Extract parent URL
         parent_match = re.search(r'\*\*Parent URL:\*\*\s*(.+)$', content, re.MULTILINE)
         if parent_match:
@@ -157,6 +202,8 @@ class ContentExtractor:
             metadata['depth'] = 1
         elif 'depth2_' in file_path.name:
             metadata['depth'] = 2
+        elif 'depth3_' in file_path.name:
+            metadata['depth'] = 3
         elif any(frame in file_path.name for frame in ['MENU', 'title', 'CONTENT']):
             metadata['depth'] = 0
             metadata['page_type'] = 'frame'
@@ -170,12 +217,37 @@ class ContentExtractor:
         """
         Categorize pages based on URL patterns according to the plan
         """
+        # Normalize URLs to resolve '..' and '.' path segments
+        original_url = self.normalize_url_path(original_url)
+        parent_url = self.normalize_url_path(parent_url)
+
         # Convert to lowercase for easier matching
         orig_lower = original_url.lower() if original_url else ""
         parent_lower = parent_url.lower() if parent_url else ""
-        
+
+        # Orthodox Church of China - check original URL first for saints
+        if "/saints/" in orig_lower:
+            return "Orthodox Church of China/Holy people and holy icons"
+
+            # Saints pages should always be categorized as Orthodox Church of China
+            #if "saints/index_ru.html" in parent_lower:
+            #else:
+            #    return "Orthodox Church of China"
+
+        # Orthodox Church of China - check for localchurch
+        elif "/localchurch/" in orig_lower or "/localchurch/" in parent_lower:
+            # Check sub-categories first (based on parent URL)
+            if "localchurch/diocese_ru.htm" in parent_lower:
+                return "Orthodox Church of China/Dioceses"
+            elif "localchurch/persons_ru.htm" in parent_lower:
+                return "Orthodox Church of China/Persons"
+            elif "localchurch/mission_ru.htm" in parent_lower:
+                return "Orthodox Church of China/Russian Spiritual Mission"
+            else:
+                return "Orthodox Church of China"
+
         # News categories - check both original URL and parent URL
-        if "/news/" in orig_lower or "/news/" in parent_lower:
+        elif "/news/" in orig_lower or "/news/" in parent_lower:
             # Check sub-categories first (based on parent URL)
             if "/news/archive_ru.htm" in parent_lower:
                 return "News/Archive"
@@ -208,15 +280,11 @@ class ContentExtractor:
                 return "Church today/Father Alexander"
             else:
                 return "Church today"
-                
-        # Orthodox Church of China
-        elif "/localchurch/index_ru.html" in parent_lower:
-            return "Orthodox Church of China"
-            
+
         # Catechism
         elif "/catechesis/index_ru.html" in parent_lower:
             return "Catechism"
-            
+
         # Default category
         else:
             return "Other"
