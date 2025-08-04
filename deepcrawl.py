@@ -8,7 +8,7 @@ from page_fetcher import (
     fetch_main_page, create_crawler, crawl_page, 
     extract_frames, fetch_page_with_frames
 )
-from link_extractor import extract_links_from_html, normalize_url
+from link_extractor import extract_links_from_html, normalize_url, normalize_url_for_deduplication
 from markdown_writer import (
     write_main_page_analysis, write_frame_content, 
     write_page_content, write_summary
@@ -53,8 +53,8 @@ async def crawl_orthodox_and_save():
     timestamp = get_timestamp()
     main_md_path = os.path.join(output_dir, f"00_main_page_analysis_{timestamp}.md")
     main_md_path = write_main_page_analysis(
-        main_md_path, main_html, base_url, encoding, frames, 
-        title=title_text, keywords=keywords
+        main_md_path, main_html, base_url, encoding, frames,
+        title=title_text, keywords=keywords, start_url=start_url
     )
     
     # Create crawler
@@ -127,7 +127,15 @@ async def crawl_orthodox_and_save():
                         }
                         
                         frame_pages.append(frame_data)
-                        all_crawled_pages.add(frame_url)
+                        all_crawled_pages.add(normalize_url_for_deduplication(frame_url))
+
+                        print(f"💾 Saved frame {i+1} to: {os.path.basename(frame_md_path)}")
+                    else:
+                        print(f"❌ Frame {i+1} failed or was rejected (likely by language detection)")
+                        frame_name = frame.get('name', f'frame_{i+1}')
+                        print(f"   Frame name: {frame_name}")
+                        print(f"   Frame URL: {frame_url}")
+                        print(f"   This frame will not appear in the output")
         else:
             # If no frames, extract links from the main page
             print("\n🔍 No frames found, extracting links from main page...")
@@ -153,7 +161,7 @@ async def crawl_orthodox_and_save():
             # Collect all links from frames
             for frame in frame_pages:
                 for link in frame['links']:
-                    if link['url'] not in all_crawled_pages:
+                    if normalize_url_for_deduplication(link['url']) not in all_crawled_pages:
                         links_by_depth[0].append(link)
             
             # If no frames, use links from main page
@@ -187,16 +195,20 @@ async def crawl_orthodox_and_save():
                     link_url = link_data['url']
                     link_text = link_data['text']
                     parent_info = f"(from {link_data['parent_name']})"
-                    
-                    # Skip if already crawled
-                    if link_url in all_crawled_pages:
-                        print(f"⏭️ Skipping already crawled: {link_url}")
+
+                    # Normalize URL for deduplication (remove fragments)
+                    normalized_link_url = normalize_url_for_deduplication(link_url)
+
+                    # Skip if already crawled (check normalized URL)
+                    if normalized_link_url in all_crawled_pages:
+                        print(f"⏭️ Skipping already crawled: {link_url} (normalized: {normalized_link_url})")
                         continue
                     
                     print(f"\n🔄 Crawling depth={current_depth} link {i+1}/{len(links_to_crawl)}: {link_url} {parent_info}")
-                    
+
                     # Use the enhanced page fetcher that handles frames
-                    page_result = await fetch_page_with_frames(link_url, base_url, config)
+                    # Use normalized URL (without fragment) for actual fetching since fragments don't change content
+                    page_result = await fetch_page_with_frames(normalized_link_url, base_url, config)
                     
                     if page_result:
                         print(f"✅ Link {i+1} success!")
@@ -208,11 +220,11 @@ async def crawl_orthodox_and_save():
                         
                         # Extract links from this page
                         page_links = extract_links_from_html(
-                            page_result['html'], base_url, link_url, config
+                            page_result['html'], base_url, normalized_link_url, config
                         )
                         
-                        # Create a safe filename from the URL
-                        safe_name = create_safe_filename(link_url, prefix=f"depth{current_depth}_{i+1:03d}")
+                        # Create a safe filename from the URL (use normalized URL without fragment)
+                        safe_name = create_safe_filename(normalized_link_url, prefix=f"depth{current_depth}_{i+1:03d}")
                         page_md_path = os.path.join(output_dir, f"{safe_name}_{timestamp}.md")
                         
                         # Save page content to markdown
@@ -235,7 +247,7 @@ async def crawl_orthodox_and_save():
                             frames_info += f"\n**Target Language:** {config['language']}\n"
                         
                         page_md_path = write_page_content(
-                            page_md_path, page_result['title'], link_url,
+                            page_md_path, page_result['title'], normalized_link_url,
                             page_result['cleaned_html'], page_result['html'],
                             parent_info_dict, link_text, current_depth,
                             links=page_links, additional_info=frames_info
@@ -252,7 +264,7 @@ async def crawl_orthodox_and_save():
                             link['parent_type'] = 'page'
                 
                             # Add to next depth if not already crawled
-                            if link['url'] not in all_crawled_pages:
+                            if normalize_url_for_deduplication(link['url']) not in all_crawled_pages:
                                 links_by_depth[current_depth].append(link)
                         
                         page_data = {
@@ -274,7 +286,7 @@ async def crawl_orthodox_and_save():
                         }
                         
                         depth_pages.append(page_data)
-                        all_crawled_pages.add(link_url)
+                        all_crawled_pages.add(normalized_link_url)
                 
                 # Add pages from this depth to all pages data
                 all_pages_data.extend(depth_pages)
@@ -286,7 +298,7 @@ async def crawl_orthodox_and_save():
         summary_path = os.path.join(output_dir, f"README_{timestamp}.md")
         summary_path = write_summary(
             summary_path, base_url, config['max_depth'],
-            all_pages_data, main_md_path
+            all_pages_data, main_md_path, start_url=start_url
         )
         
         # Count pages by depth

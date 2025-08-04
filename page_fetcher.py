@@ -3,11 +3,64 @@ import aiohttp
 import ssl
 import chardet
 import os
+import re
 from urllib.parse import urlparse, urljoin
 from bs4 import BeautifulSoup
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
 from link_extractor import is_same_domain
-from language_detector import is_target_language
+from language_detector import is_target_language, detect_chinese_content_patterns
+
+def _validate_decoded_content(html_content, used_encoding, original_encoding):
+    """
+    Validate that decoded content is reasonable and not corrupted
+
+    Args:
+        html_content (str): Decoded HTML content
+        used_encoding (str): Encoding used for decoding
+        original_encoding (str): Originally detected encoding
+
+    Returns:
+        bool: True if content appears valid, False if likely corrupted
+    """
+    # Basic sanity checks
+    if len(html_content) < 100:
+        return False
+
+    # Check for reasonable HTML structure
+    if not any(tag in html_content.lower() for tag in ['<html', '<head', '<body', '<div', '<p', '<title']):
+        return False
+
+    # Check if this appears to be Chinese content based on HTML patterns
+    if detect_chinese_content_patterns(html_content):
+        # If HTML suggests Chinese content but we're using Russian encoding, it's likely corrupted
+        if used_encoding.lower() in ['koi8-r', 'windows-1251', 'cp1251']:
+            print(f"⚠️ HTML patterns suggest Chinese content but decoded with {used_encoding} - likely corrupted")
+            return False
+
+    # Check for encoding mismatch indicators
+    # If original was Chinese but we're using Russian encoding, look for corruption signs
+    if (original_encoding and original_encoding.lower().startswith(('gb', 'big5')) and
+        used_encoding.lower() in ['koi8-r', 'windows-1251', 'cp1251']):
+
+        # Look for patterns that suggest Chinese content decoded with wrong encoding
+        # Chinese characters decoded with Russian encodings often produce specific patterns
+        corruption_patterns = [
+            r'[А-Я]{10,}',  # Long sequences of uppercase Cyrillic (unusual in normal text)
+            r'[а-я]{1}[А-Я]{1}[а-я]{1}[А-Я]{1}',  # Alternating case (corruption indicator)
+            r'[Ё-я]{20,}',  # Very long sequences of Cyrillic characters
+        ]
+
+        for pattern in corruption_patterns:
+            if re.search(pattern, html_content):
+                print(f"⚠️ Detected corruption pattern when Chinese content decoded with {used_encoding}")
+                return False
+
+    # Check character distribution - normal text shouldn't have too many control characters
+    control_chars = sum(1 for c in html_content if ord(c) < 32 and c not in '\n\r\t')
+    if control_chars > len(html_content) * 0.01:  # More than 1% control characters is suspicious
+        return False
+
+    return True
 
 def get_base_url(url):
     """
@@ -66,15 +119,33 @@ async def fetch_page_with_encoding_detection(url, session):
                     return html_content, encoding
                 except UnicodeDecodeError as decode_error:
                     print(f"⚠️ Failed to decode with {encoding}, trying fallback encodings...")
-                    
-                    # Try common Russian and Chinese encodings as fallback
-                    fallback_encodings = ['koi8-r', 'windows-1251', 'gb2312', 'gbk', 'gb18030', 'utf-8', 'latin-1']
-                    
+
+                    # Determine appropriate fallback encodings based on initial detection
+                    if encoding and encoding.lower().startswith(('gb', 'big5', 'hz')):
+                        # For Chinese encodings, try other Chinese encodings first
+                        fallback_encodings = ['gbk', 'gb18030', 'big5', 'hz-gb-2312', 'utf-8', 'latin-1']
+                    elif encoding and encoding.lower() in ['koi8-r', 'windows-1251', 'cp1251']:
+                        # For Russian encodings, try other Russian encodings first
+                        fallback_encodings = ['windows-1251', 'koi8-r', 'cp1251', 'utf-8', 'latin-1']
+                    else:
+                        # General fallback order - prioritize UTF-8 and common encodings
+                        fallback_encodings = ['utf-8', 'windows-1251', 'koi8-r', 'gb2312', 'gbk', 'gb18030', 'latin-1']
+
                     for fallback_encoding in fallback_encodings:
+                        if fallback_encoding == encoding:
+                            continue  # Skip the encoding that already failed
                         try:
                             html_content = raw_content.decode(fallback_encoding)
                             print(f"✅ Successfully decoded with {fallback_encoding} ({len(html_content)} chars)")
-                            return html_content, fallback_encoding
+
+                            # Additional validation: check if the decoded content makes sense
+                            # by looking for common HTML patterns and reasonable character distribution
+                            if _validate_decoded_content(html_content, fallback_encoding, encoding):
+                                return html_content, fallback_encoding
+                            else:
+                                print(f"⚠️ Decoded content with {fallback_encoding} appears corrupted, trying next encoding...")
+                                continue
+
                         except UnicodeDecodeError:
                             continue
                     
@@ -182,10 +253,13 @@ async def crawl_page(crawler, url, config):
         
         if result.success:
             # Check if the page is in the target language
-            if config.get('language') and not is_target_language(result.html, config['language']):
+            # Use more lenient language detection for frames (they often have minimal text)
+            is_frame_url = 'frame' in url.lower() or any(frame_indicator in url.lower() for frame_indicator in ['nav', 'menu', 'title'])
+            min_text_length = 20 if is_frame_url else 50
+            if config.get('language') and not is_target_language(result.html, config['language'], min_text_length, is_frame=is_frame_url):
                 print(f"⏭️ Skipping page: not in target language ({config['language']})")
                 return None
-            
+
             return {
                 'url': url,
                 'html': result.html,
@@ -234,7 +308,10 @@ async def fetch_page_with_frames(url, base_url, config):
             return None
         
         # Check if the page is in the target language
-        if config.get('language') and not is_target_language(html_content, config['language']):
+        # Use more lenient language detection for frames (they often have minimal text)
+        is_frame_url = 'frame' in url.lower() or any(frame_indicator in url.lower() for frame_indicator in ['nav', 'menu', 'title'])
+        min_text_length = 20 if is_frame_url else 50
+        if config.get('language') and not is_target_language(html_content, config['language'], min_text_length, is_frame=is_frame_url):
             print(f"⏭️ Skipping page: not in target language ({config['language']})")
             return None
         

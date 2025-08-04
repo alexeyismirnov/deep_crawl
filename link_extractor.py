@@ -115,27 +115,50 @@ def normalize_url_path(url):
         print(f"Warning: Failed to normalize URL {url}: {e}")
         return url
 
+def normalize_url_for_deduplication(url):
+    """
+    Normalize URL for deduplication by removing fragments (hash parts)
+
+    Fragment identifiers (#section) don't represent different pages,
+    they're just anchors within the same page, so they should be
+    treated as the same URL for crawling purposes.
+
+    Args:
+        url (str): URL to normalize
+
+    Returns:
+        str: URL without fragment identifier
+    """
+    if not url:
+        return url
+
+    # Parse the URL and remove the fragment
+    parsed = urlparse(url)
+    # Reconstruct without fragment
+    normalized_parsed = parsed._replace(fragment='')
+    return urlunparse(normalized_parsed)
+
 def is_same_domain(url, base_url):
     """
     Check if a URL belongs to the same domain as the base URL
-    
+
     Args:
         url (str): URL to check
         base_url (str): Base URL of the site
-        
+
     Returns:
         bool: True if the URL is from the same domain, False otherwise
     """
     try:
         url_domain = urlparse(url).netloc
         base_domain = urlparse(base_url).netloc
-        
+
         # Handle www. prefix
         if url_domain.startswith('www.'):
             url_domain = url_domain[4:]
         if base_domain.startswith('www.'):
             base_domain = base_domain[4:]
-        
+
         return url_domain == base_domain
     except:
         return False
