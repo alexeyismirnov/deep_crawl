@@ -274,6 +274,31 @@ async def crawl_page(crawler, url, config):
         print(f"❌ Exception while crawling {url}: {str(e)}")
         return None
 
+def extract_main_content(html_content):
+    """
+    Extract the main content from an HTML page, excluding frames
+    
+    Args:
+        html_content (str): HTML content
+        
+    Returns:
+        str: Main content HTML
+    """
+    soup = BeautifulSoup(html_content, 'html.parser')
+    
+    # Remove all frames and iframes from the soup
+    for frame in soup.find_all(['frame', 'iframe']):
+        frame.extract()
+    
+    # Get the body or main content
+    body = soup.find('body')
+    if body:
+        # Return the body content as string
+        return str(body)
+    else:
+        # If no body tag, return the whole content
+        return html_content
+
 async def fetch_page_with_frames(url, base_url, config):
     """
     Fetch a page and handle frames if present
@@ -322,6 +347,9 @@ async def fetch_page_with_frames(url, base_url, config):
         if frames:
             print(f"🔍 Found {len(frames)} frames in {url}")
             
+            # Extract the main content (excluding frames)
+            main_content = extract_main_content(html_content)
+            
             # Create a crawler to handle frames
             async with await create_crawler(config) as crawler:
                 frame_contents = []
@@ -358,8 +386,14 @@ async def fetch_page_with_frames(url, base_url, config):
                                 'title': frame_result['title']
                             })
                 
-                # Combine frame contents
+                # Combine main content and frame contents
                 combined_content = f"<h1>Page with {len(frames)} frames</h1>\n\n"
+                
+                # First add the main content of the page (excluding frames)
+                combined_content += f"<h2>Main Page Content</h2>\n"
+                combined_content += f"<div class='main-content'>{main_content}</div>\n\n"
+                
+                # Then add frame contents
                 for frame in frame_contents:
                     combined_content += f"<h2>Frame {frame['number']}: {frame['name']}</h2>\n"
                     combined_content += f"<div class='frame-content'>{frame['content']}</div>\n\n"
@@ -377,6 +411,7 @@ async def fetch_page_with_frames(url, base_url, config):
                     'title': title_text,
                     'has_frames': True,
                     'frames': frame_contents,
+                    'main_content': main_content,
                     'encoding': encoding,
                     'success': True
                 }

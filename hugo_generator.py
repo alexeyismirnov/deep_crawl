@@ -10,6 +10,7 @@ from pathlib import Path
 import logging
 from datetime import datetime
 import html
+import urllib.parse
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -76,6 +77,48 @@ class HugoContentGenerator:
             text = text[:50].rstrip('-')
 
         return text or "untitled"
+    
+    def url_to_filename(self, url):
+        """Convert a URL to a safe filename"""
+        if not url:
+            return "untitled"
+        
+        # Parse the URL to get the path
+        try:
+            parsed_url = urllib.parse.urlparse(url)
+            path = parsed_url.path
+            
+            # Remove leading and trailing slashes
+            path = path.strip('/')
+            
+            # If path is empty, use the netloc (domain) as fallback
+            if not path and parsed_url.netloc:
+                path = parsed_url.netloc
+            
+            # If still empty, use the entire URL
+            if not path:
+                path = url
+                
+            # Replace slashes with hyphens
+            path = path.replace('/', '-')
+            
+            # Replace special characters
+            path = re.sub(r'[^\w\s-]', '', path)
+            
+            # Replace spaces with hyphens
+            path = re.sub(r'[-\s]+', '-', path)
+            
+            # Convert to lowercase
+            path = path.lower().strip('-')
+            
+            # Limit length
+            if len(path) > 100:  # Allow longer filenames for URLs
+                path = path[:100].rstrip('-')
+                
+            return path or "untitled"
+        except Exception as e:
+            logger.error(f"Error converting URL to filename: {e}")
+            return self.sanitize_filename(url)  # Fallback to regular sanitization
 
     def escape_yaml_string(self, text):
         """Escape quotes and special characters in YAML strings"""
@@ -130,22 +173,27 @@ class HugoContentGenerator:
         """Create a Hugo content file from an item"""
         category = item.get('category', 'Other')
         title = item.get('title', 'Без названия')
+        original_url = item.get('original_url', '')
         
         # Create directory structure
         category_path = self.get_category_path(category)
         content_path = self.content_dir / category_path
         content_path.mkdir(parents=True, exist_ok=True)
         
-        # Create filename
-        safe_title = self.sanitize_filename(title)
-        filename = f"{safe_title}.md"
-        file_path = content_path / filename
-        
         # Prepare content
         html_content = item.get('html_content', '')
         clean_text = item.get('clean_text', '')
-        original_url = item.get('original_url', '')
         parent_url = item.get('parent_url', '')
+        
+        # Create filename based on URL instead of title
+        if original_url:
+            safe_filename = self.url_to_filename(original_url)
+        else:
+            # Fallback to title if no URL is available
+            safe_filename = self.sanitize_filename(title)
+            
+        filename = f"{safe_filename}.md"
+        file_path = content_path / filename
         
         # Create front matter - no menu entries for individual articles
         front_matter = f"""---
@@ -291,9 +339,15 @@ bookFlatSection: false
                     sorted_items = sorted(items, key=lambda x: x.get('title', ''))
                     for item in sorted_items:
                         title = item.get('title', 'Без названия')
-                        # Create relative link to the article
-                        safe_title = self.sanitize_filename(title)
-                        article_link = f"{safe_title}/"
+                        original_url = item.get('original_url', '')
+                        
+                        # Create relative link to the article using URL-based filename
+                        if original_url:
+                            safe_filename = self.url_to_filename(original_url)
+                        else:
+                            safe_filename = self.sanitize_filename(title)
+                            
+                        article_link = f"{safe_filename}/"
                         content += f"- [{title}]({article_link})\n"
                     content += "\n"
             else:
@@ -304,9 +358,15 @@ bookFlatSection: false
                 sorted_items = sorted(items, key=lambda x: x.get('title', ''))
                 for item in sorted_items:
                     title = item.get('title', 'Без названия')
-                    # Create relative link to the article
-                    safe_title = self.sanitize_filename(title)
-                    article_link = f"{safe_title}/"
+                    original_url = item.get('original_url', '')
+                    
+                    # Create relative link to the article using URL-based filename
+                    if original_url:
+                        safe_filename = self.url_to_filename(original_url)
+                    else:
+                        safe_filename = self.sanitize_filename(title)
+                        
+                    article_link = f"{safe_filename}/"
                     content += f"- [{title}]({article_link})\n"
                 content += "\n"
 

@@ -102,18 +102,6 @@ def normalize_url_path(url):
     except Exception as e:
         print(f"Warning: Failed to normalize URL {url}: {e}")
         return url
-        
-        # Handle empty path case
-        if not normalized_path:
-            normalized_path = '/'
-        
-        # Reconstruct the URL
-        normalized_parsed = parsed._replace(path=normalized_path)
-        return urlunparse(normalized_parsed)
-        
-    except Exception as e:
-        print(f"Warning: Failed to normalize URL {url}: {e}")
-        return url
 
 def normalize_url_for_deduplication(url):
     """
@@ -198,7 +186,7 @@ def should_skip_url(url, config, base_url):
 
 def extract_links_from_html(html, base_url, current_url, config):
     """
-    Extract links from HTML
+    Extract links from HTML - with improved fragment handling
 
     Args:
         html (str): HTML content
@@ -211,6 +199,9 @@ def extract_links_from_html(html, base_url, current_url, config):
     """
     soup = BeautifulSoup(html, 'html.parser')
     links = []
+    
+    # Track URLs we've already processed to avoid duplicates with different fragments
+    processed_urls = set()
 
     # Extract links from <a> tags
     for a_tag in soup.find_all('a', href=True):
@@ -225,9 +216,21 @@ def extract_links_from_html(html, base_url, current_url, config):
         # Check if we should skip this URL
         if should_skip_url(normalized_url, config, base_url):
             continue
+            
+        # Remove fragment for deduplication
+        deduplicated_url = normalize_url_for_deduplication(normalized_url)
+        
+        # Skip if we've already processed this URL (ignoring fragment)
+        if deduplicated_url in processed_urls:
+            continue
+            
+        # Add to processed URLs set
+        processed_urls.add(deduplicated_url)
 
+        # Store both the original URL and the deduplicated URL
         links.append({
-            'url': normalized_url,
+            'url': deduplicated_url,  # Use deduplicated URL (without fragment) for crawling
+            'original_url': normalized_url,  # Keep original URL with fragment for reference
             'text': link_text
         })
 
@@ -244,9 +247,20 @@ def extract_links_from_html(html, base_url, current_url, config):
         # Check if we should skip this URL
         if should_skip_url(normalized_url, config, base_url):
             continue
+            
+        # Remove fragment for deduplication
+        deduplicated_url = normalize_url_for_deduplication(normalized_url)
+        
+        # Skip if we've already processed this URL (ignoring fragment)
+        if deduplicated_url in processed_urls:
+            continue
+            
+        # Add to processed URLs set
+        processed_urls.add(deduplicated_url)
 
         links.append({
-            'url': normalized_url,
+            'url': deduplicated_url,  # Use deduplicated URL (without fragment) for crawling
+            'original_url': normalized_url,  # Keep original URL with fragment for reference
             'text': link_text
         })
 
@@ -270,9 +284,20 @@ def extract_links_from_html(html, base_url, current_url, config):
         # Check if we should skip this URL
         if should_skip_url(normalized_url, config, base_url):
             continue
+            
+        # Remove fragment for deduplication
+        deduplicated_url = normalize_url_for_deduplication(normalized_url)
+        
+        # Skip if we've already processed this URL (ignoring fragment)
+        if deduplicated_url in processed_urls:
+            continue
+            
+        # Add to processed URLs set
+        processed_urls.add(deduplicated_url)
 
         links.append({
-            'url': normalized_url,
+            'url': deduplicated_url,  # Use deduplicated URL (without fragment) for crawling
+            'original_url': normalized_url,  # Keep original URL with fragment for reference
             'text': link_text
         })
 

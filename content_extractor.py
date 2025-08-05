@@ -204,6 +204,10 @@ class ContentExtractor:
             metadata['depth'] = 2
         elif 'depth3_' in file_path.name:
             metadata['depth'] = 3
+        elif 'depth4_' in file_path.name:
+            metadata['depth'] = 4
+        elif 'depth5_' in file_path.name:
+            metadata['depth'] = 5
         elif any(frame in file_path.name for frame in ['MENU', 'title', 'CONTENT']):
             metadata['depth'] = 0
             metadata['page_type'] = 'frame'
@@ -282,7 +286,7 @@ class ContentExtractor:
                 return "Church today"
 
         # Catechism
-        elif "/catechesis/index_ru.html" in parent_lower:
+        elif "/catechesis/" in parent_lower:
             return "Catechism"
 
         # Default category
